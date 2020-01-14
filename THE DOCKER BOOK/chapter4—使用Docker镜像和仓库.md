@@ -5,7 +5,7 @@
 
 &emsp;&emsp;当Docker第一次启动一个容器时，初始的读写层是空的。当文件系统发生变化时，这些变化都会应用到这一层上。比如，向修改一个文件，这个文件首先会从读写层下面的只读层被复制到读写层。该文件的只读版本依然存在，但是已经被读写层中的该文件副本（刚复制过来的）所隐藏。这种机制被称为写时复制。（因为需要对一个文件进行写操作即改动时，就会从只读层拷贝过来一份进行修改，实际只读层的并未改动且被隐藏了）。
 &emsp;&emsp;这个技术是使Docker如果强大的技术之一。每个只读层都只能读，并且永远不会变化。
-![alt 镜像理解](https://github.com/haochen233/picture/blob/master/Docker%E9%95%9C%E5%83%8F%E7%90%86%E8%A7%A3.png "理解")
+![alt 镜像理解](https://haochen233.oss-cn-beijing.aliyuncs.com/%E5%9B%BE%E5%BA%8A/Docker%E9%95%9C%E5%83%8F%E7%90%86%E8%A7%A3.png?Expires=1578974785&OSSAccessKeyId=TMP.hj8jstLkqDHyKMCs46N8jY6WJ2etHS1iaD9wnjFpNA4FRXoL5BePuPfTTb169DoZ6qPMpL6HosBb6AZRTrUySmgsr7ZMRCWf4hjpo3A6KgU9f7raUPymZjtNHGBBFJ.tmp&Signature=xgO3QoXqB6XaHi1FkgQZhOeY2%2B4%3D "理解")
 &emsp;&emsp;容器是可以修改的，它们都有自己的状态。结合上图，容器的这种特点加上镜像分层框架（image layering framework），可以使我们快速构建镜像并且运行包含我们自己的应用程序和服务的容器。
 
 ## 4.2 列出镜像
@@ -168,4 +168,91 @@ WORKDIR指令用来在从镜像中创建一个新容器时，在容器内部设�
 
 先将工作目录切换到`/opt/webapp/db`然后运行了`RUN bundle install`命令，接着将工作目录切换到`/opt/webapp`,然后设置了ENTERPOINT指令来启动rackup命令。
 
-&emsp;&emsp;可以通过docker run的`-w`在启动容器时覆盖工作目录。例如：`docker run -it -w /var/log test pwd`，该命令会将工作命令设置为`/var/log`。
+&emsp;&emsp;可以通过docker run的`-w`在启动容器时覆盖工作目录。例如：`docker run -it -w /var/log test pwd`，该命令会将工作命令设置为`/var/log`。  
+
+4. ENV 
+&emsp;&emsp;ENV指令用来在镜像构建过程中设置环境变量  
+&emsp;&emsp;例如：`ENV RVM_PATH /home/rvm/`  这个新的环境变量可以在后续的任何RUN指令中使用，这就如同在命令前指定了环境变量前缀一样。例如：  
+```Dockerfile
+ENV TARGET_DIR /opt/app
+WORKDIR $TARGET_DIR
+```
+&emsp;&emsp;在上例中，我们设定了一个新的环境变量TARGET_DIR，并在WORKDIR中使用了它的值。然后WORKDIR指令的值会被设为/opt/app。  
+&emsp;&emsp;并且这些环境变量也会被持久保存到从我们的镜像创建的任何容器中。如果我们的ENV指令构建的容器中运行`env`命令，就可以看到Dockerfile中设定的环境变量。也可以使用`docker run`的`-e`选项来传递环境。这些变量将只会在运行时有效。例如：  
+`docker run -it -e "WEB_PORT=8080" ubuntu env`这条命令会会启动一个容器，并且在容器中传入了`WEB_PORT`环境变量。然后运行`env`命令。  
+
+5. USER
+&emsp;&emsp;USER指令用来指定会以什么样的用户去运行。例如：`USER nginx`基于该镜像启动的容器会以nginx用户的身份运行。还可以指定用户名或UID以及组或GID，甚至是两者的组合。
+```Dockerfile
+USER user
+user user:group
+USER uid
+USER uid:gid
+USER user:gid
+USER uid:group
+```
+&emsp;&emsp;也可以在`docker run`命令中通过`-u`选型来覆盖该指令指定的值。如果不通过USER指令指定用户，默认用户为root。  
+
+6. VOLUME
+&emsp;&emsp;VOLUME指令用来基于镜像创建的容器添加卷。一个卷是可以存在于一个或多个容器内的特定的目录，这个目录可以绕过联合文件系统。并提供如下共享数据或者对数据进行持久化的功能。  
+- 卷可以在容器间共享合重用。
+- 一个容器可以不是必须和其他容器共享卷
+- 对卷的修改是立时生效的
+- 对卷的修改不会对更新镜像产生影响
+- 卷会一直存在直到没有任何容器再使用它。
+&emsp;&emsp;卷功能可以让我们把数据（如源代码）、数据库或者其他内容添加到镜像中而不是将这些内容提交到镜像中，并且允许我们在多个容器间共享这些内容。我们可以利用此功能来测试容器和内部的应用程序代码，管理日志，或者处理容器内部的数据库。  
+&emsp;&emsp;用法示例如下：`VOLUME ["/opt/project"]`这条指令会基于此镜像创建的任何容器创建一个名为`/opt/project`的挂载点。也可以通过数组的方式指定多个卷。  
+
+7. ADD
+&emsp;&emsp;ADD指令用来将构建环境下的文件和目录复制到镜像中。例如：`ADD softwawre.lic /opt/application/software.lic`这里的ADD指令会将构建目录下的software.lic文件复制到镜像中的/opt/application/software.lic。指向源文件的位置参数可以是一个URL，或者构建上下文或环境中文件名或目录。不能对构建目录或者上下文之外的文件进行ADD操作。  
+&emsp;&emsp;在ADD文件时，Docker通过目的地址参数末尾的字符来判断文件源是目录还是文件。如果目标地址以`/`结尾，那么Docker就认为原位置指向的是一个目录。如果不是以`/`结尾，那么Docker就认为指向的是文件。  
+&emsp;&emsp;最后值得一提的是，ADD在处理本地归档文件（tar archive）时，Docker会自动将归档文件解开（unpack）。  
+&emsp;&emsp;如果目的位置不存在的话，Docker将会为我们创建这个全路径，包括路径中的任何目录。新创建的目录和文件的模式是0755，并且UID和GID都是0。  
+&emsp;&emsp;注意ADD指令户使得构建缓存变得无效，这一点很重要。如果通过ADD指令向镜像添加一个文件或目录，那么这将使Dockerfile中的后续指令都不能继续使用之前的构建缓存。
+
+8. COPY
+&emsp;&emsp;COPY指令非常类似与ADD指令，它们根本的不同是COPY只关心在构建上下文中复制本地文件，而不会去做文件提取和解压工作。  
+
+9. ONBUILD
+&emsp;&emsp;ONBUILD指令能为镜像添加触发器（trigger）。当一个镜像被用做其他镜像的基础镜像时，该镜像的触发器会被执行。  
+
+触发器会在构建过程中插入新指令，我们可以认为这些指令是紧跟在FROM之后指定的。触发器可以是任何构建指令，比如下例：  
+```Dockerfile
+ONBUILD ADD . /app/src
+ONBUILD RUN cd /app/src && make
+```
+&emsp;&emsp;该例会在创建的镜像中加入ONBUILD触发器，ONBUILD指令可以在镜像上运行docker inspect命令来查看。  
+&emsp;&emsp;这里有好几条指令是不能用在ONBUILD指令中的，包括`FROM`、`MAINTAINER`和`ONBUILD`本身。之所以这么规定视为了防止在Dockerfile构建过程中产生递归调用的问题。  
+
+## 4.6 将镜像推送到Docker Hub
+&emsp;&emsp;镜像构建完毕之后，我们可以将它上传到Docker Hub上面去，这样其他人就能使用这个镜像了。  
+&emsp;&emsp;注意Docker Hub也提供了对私有仓库的支持，这是一个需要付费的功能。  
+&emsp;&emsp;我们可以通过docker push命令将镜像推送到Docker Hub。  
+&emsp;&emsp;例如：`docker push static_web`这样会出错。Docker会认为这是一个root仓库。root仓库是由Docker公司的团队管理的，因此会拒绝我们的推送请求。  
+&emsp;&emsp;一般正确的推送格式为：`docker push 用户名/仓库名:标签`。  
+
+&emsp;&emsp;**自动构建**，不太重要，就不在赘述了。  
+
+## 4.7 删除镜像  
+&emsp;&emsp;如果不在需要一个镜像了，也可以将它删除。可以用`docker rmi`命令来删除一个镜像。  
+例如：  
+`docker rmi docker_ubuntu/tree_ubuntu:useless_ubuntu `然后这个镜像会被删除，在这里也可以看到Docker的分层文件系统：每一个Deleteed:行都代表一个镜像层被删除。  
+&emsp;&emsp;还可以在命令行指定一个镜像名列表来删除多个镜像。可以类似删除所有容器那样删除所有镜像：  
+```shell
+docker rmi `docker images -a -q`
+```
+## 4.8 运行自己的Docker Registry
+&emsp;&emsp;显然，拥有Docker镜像的一个公共的Registry非常有用。但是，有时候我们可能希望构建和存储包含不想被公开的信息或数据的镜像。这时候我们有以下两种选择。  
+- 利用Docker Hub上的私有仓库（收费）
+- 在防火墙后面运行你自己的Registry
+&emsp;&emsp;值得感谢的是，Docker公司的团队开源了它们用于运行Docker Registry的代码，这样我们就可以基于此代码在内部运行自己的Registry。  
+
+### 4.8.1 从容器运行Registry
+&emsp;&emsp;从Docker 容器安装一个Registry非常简单。例如：`docker run -p 5000:5000 registry`该命令会启动一个运行Registry应用的容器，并绑定到本地宿主机的5000端口。 
+
+### 4.8.2 测试新Registry
+&emsp;&emsp;将本地已经存在的镜像上传到我们新的Registry上去。首先，需要找到镜像ID，并使用新的Registry给该镜像打上标签。为了指定新的Registry目的地址，需要在镜像名前加上主机名和端口前缀。例如： 
+```shell
+docker run tag e9fb675cf992 ubuntu:5000/haochen233/docker_ubuntu
+```
+&emsp;&emsp;然后就可以使用docker push 推送镜像`docker push ubuntu:5000/haochen/docker_ubuntu`,然后这个镜像就被提交到本地的Registry中了，并且可以使用改镜像构建新容器。例如： `docker run -it ubuntu:5000/haochen233/docker_ubuntu bash`。这是在防火墙后面部署自己的Docker Registry的最简单的方式。
